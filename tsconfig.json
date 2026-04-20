@@ -13,7 +13,10 @@
       "@utils/*": ["src/utils/*"],
       "@theme/*": ["src/theme/*"],
       "@navigation/*": ["src/navigation/*"],
-      "@features/*": ["src/features/*"]
+      "@features/*": ["src/features/*"],
+      "@store/*" : ["src/store/*"],
+      "@context/*": ["src/context/*"],
+      "@service/*" : ["src/service/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
