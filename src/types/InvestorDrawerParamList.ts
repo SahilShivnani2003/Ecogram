@@ -10,4 +10,5 @@ export type InvestorDrawerParamList = {
     Refrels: undefined;
     Support: undefined;
     Profile: undefined;
+    ExitRequest: undefined;
 }

@@ -1,4 +1,4 @@
-import InvestorDrawerNavigation from '@/navigation/InvestorDrawerNavigation';
+import AppNavigator from '@/navigation/AppNavigator';
 import { StatusBar, StyleSheet, useColorScheme } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,7 +9,7 @@ function App() {
         <SafeAreaProvider>
             <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
             <SafeAreaView style={styles.container}>
-                <InvestorDrawerNavigation />
+                <AppNavigator/>
             </SafeAreaView>
         </SafeAreaProvider>
     );
