@@ -4,10 +4,11 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors, Spacing, Typography } from '@theme/index';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/RootStackParamList';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const { width, height } = Dimensions.get('window');
 
-type splashScreenProps = NativeStackScreenProps<RootStackParamList, 'splash'>;
+type splashScreenProps = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
 const SplashScreen = ({ navigation }: splashScreenProps) => {
     // ── Animation refs ──────────────────────────────────────────────────────────
@@ -24,7 +25,23 @@ const SplashScreen = ({ navigation }: splashScreenProps) => {
     const loadBarWidth = useRef(new Animated.Value(0)).current;
     const screenOpacity = useRef(new Animated.Value(1)).current;
     const glowOpacity = useRef(new Animated.Value(0.15)).current;
+    const { loadAuth } = useAuthStore();
 
+    const handleStartNavigation = async () => {
+        await loadAuth();
+
+        const { isAuthenticated, user } = useAuthStore.getState();
+
+        if (isAuthenticated) {
+            if (user?.role === 'investor') {
+                navigation.replace('Investor');
+            } else {
+                console.log('Customer login');
+            }
+        } else {
+            navigation.replace('Login');
+        }
+    };
     useEffect(() => {
         // Glow pulse
         Animated.loop(
@@ -132,7 +149,7 @@ const SplashScreen = ({ navigation }: splashScreenProps) => {
                 useNativeDriver: true,
             }),
         ]).start(() => {
-            navigation.replace('investor');
+            handleStartNavigation();
         });
     }, []);
 

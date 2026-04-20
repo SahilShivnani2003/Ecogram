@@ -13,6 +13,12 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AppInput from '@components/ui/AppInput';
 import { Colors, Radius, Shadow, Spacing, Typography } from '@theme/index';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '@/types/RootStackParamList';
+import { useLogin } from '../hooks/useLogin';
+import { useAlert } from '@/context/AlertContext';
+import { useAuthStore } from '@/store/useAuthStore';
+import { ApiError } from '@/types/ApiError';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,15 +30,6 @@ interface FormValues {
 interface FormErrors {
     email?: string;
     password?: string;
-}
-
-interface LoginScreenProps {
-    /** Called with form values on successful validation */
-    onLogin?: (values: FormValues) => Promise<void> | void;
-    /** Navigate to Forgot Password */
-    onForgotPassword?: () => void;
-    /** Navigate to Sign Up / Register */
-    onSignUp?: () => void;
 }
 
 // ─── Validators ───────────────────────────────────────────────────────────────
@@ -50,9 +47,13 @@ function validatePassword(password: string): string | undefined {
     return undefined;
 }
 
+type LoginScreenProps = NativeStackScreenProps<RootStackParamList, 'Login'>;
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onForgotPassword, onSignUp }) => {
+const LoginScreen = ({ navigation }: LoginScreenProps) => {
+    const alert = useAlert();
+    const setAuth = useAuthStore().setAuth;
+    const { mutate: login } = useLogin();
     const [values, setValues] = useState<FormValues>({ email: '', password: '' });
     const [errors, setErrors] = useState<FormErrors>({});
     const [loading, setLoading] = useState(false);
@@ -140,14 +141,25 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onForgotPassword, on
 
         setLoading(true);
         setServerError('');
-        try {
-            await onLogin?.(values);
-        } catch (err: any) {
-            setServerError(err?.message ?? 'Login failed. Please try again.');
-            shake();
-        } finally {
-            setLoading(false);
-        }
+
+        login(values,
+            {
+                onSuccess: data => {
+                    setLoading(false);
+                    setAuth(data.user, data.token, data.refreshToken);
+                    alert.success('Login Successfull');
+
+                    if (data?.user?.role === 'investor') {
+                        navigation.replace('Investor');
+                    }
+                },
+                onError: (error: ApiError) => {
+                    setLoading(false);
+                    setServerError(error.message || 'Login failed. Please try again.');
+                    alert.error(error.message || 'Login failed. Please try again.');
+                },
+            },
+        );
     };
 
     const isDisabled = loading;
@@ -235,7 +247,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onForgotPassword, on
                     {/* Forgot */}
                     <TouchableOpacity
                         style={styles.forgotRow}
-                        onPress={onForgotPassword}
+                        onPress={() => navigation.navigate('ForgotPassword')}
                         activeOpacity={0.7}
                     >
                         <Text style={styles.forgotText}>Forgot password?</Text>
@@ -287,7 +299,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onForgotPassword, on
                 {/* ── Sign-up footer ── */}
                 <View style={styles.signupRow}>
                     <Text style={styles.signupPrompt}>New investor? </Text>
-                    <TouchableOpacity onPress={onSignUp} activeOpacity={0.7}>
+                    <TouchableOpacity
+                        onPress={() => navigation.navigate('Register')}
+                        activeOpacity={0.7}
+                    >
                         <Text style={styles.signupLink}>Create Account</Text>
                     </TouchableOpacity>
                 </View>

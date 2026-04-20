@@ -7,6 +7,7 @@ import { useColorScheme } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/service/queryClient';
 import { AlertProvider } from '@/context/AlertContext';
+import LoginScreen from '@/features/auth/screens/LoginScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function AppNavigator() {
@@ -21,8 +22,9 @@ export default function AppNavigator() {
                             statusBarStyle: isDark ? 'light' : 'dark',
                         }}
                     >
-                        <Stack.Screen name="splash" component={SplashScreen} />
-                        <Stack.Screen name="investor" component={InvestorDrawerNavigation} />
+                        <Stack.Screen name="Splash" component={SplashScreen} />
+                        <Stack.Screen name="Login" component={LoginScreen} />
+                        <Stack.Screen name="Investor" component={InvestorDrawerNavigation} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>
