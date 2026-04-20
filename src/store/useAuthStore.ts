@@ -11,6 +11,7 @@ interface AuthState {
     setAuth: (user: User, token: string, refreshToken: string) => void;
     removeAuth: () => void;
     loadAuth: () => void;
+    updateToken: (token: string) => void;
 }
 
 const STORAGE_KEY = 'auth';
@@ -70,6 +71,31 @@ export const useAuthStore = create<AuthState>((set) => ({
             }
         } catch (error) {
             console.error('Error while fetchin auth data : ', error);
+        }
+    },
+    updateToken: async (token: string) => {
+        try {
+            const data = await AsyncStorage.getItem(STORAGE_KEY);
+
+            if (data) {
+                const authData = JSON.parse(data);
+                const existingUser = authData?.user;
+                const existingRefershToken = authData?.refreshToken;
+                const updatedAuthData = JSON.stringify({ existingUser, token, existingRefershToken });
+
+                await AsyncStorage.setItem(STORAGE_KEY, updatedAuthData);
+
+                set({
+                    isAuthenticated: true,
+                    user: existingUser,
+                    token,
+                    refreshToken: existingRefershToken
+                })
+            } else {
+                console.warn('No data found ');
+            }
+        } catch (error) {
+            console.error('Error while updating token');
         }
     }
 }))

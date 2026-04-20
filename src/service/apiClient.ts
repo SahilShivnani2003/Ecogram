@@ -53,7 +53,7 @@ privateClient.interceptors.request.use(
 //Error handling for private client
 privateClient.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async(error) => {
 
         const apiError: ApiError = {
             status: error?.response?.status,
@@ -61,6 +61,20 @@ privateClient.interceptors.response.use(
             data: error?.response?.data
         }
 
+        if(apiError.status === 401) {
+            try{
+                const {updateToken} = useAuthStore.getState();
+                const response = await axios.post(`${BASE_URL}/auth/refresh`);
+
+                if(response.data?.success){
+                    console.log('Token updated : ', response.data);
+                    updateToken(response.data?.token);
+                };
+                
+            }catch(error){
+                console.error('Error while refreshing token : ', error);
+            }
+        }
         return Promise.reject(apiError);
     }
 )
