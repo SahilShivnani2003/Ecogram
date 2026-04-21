@@ -8,16 +8,15 @@ import {
     SafeAreaView,
     StatusBar,
     TextInput,
-    Modal,
+    ActivityIndicator,
+    Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radius, Shadow } from '@theme/index';
+import { Colors, Typography, Spacing, Radius } from '@theme/index';
 import { ExitRequest, BankDetails } from '../../../types/ExitRequest';
 import { Investment } from '@features/investments/types/Investment';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const mockInvestments: Investment[] = [];
-const mockExitRequests: ExitRequest[] = [];
+import { useGetMyInvestment } from '@/features/investments/hooks/useGetMyInvestment';
+import { useGetExitRequest } from '../hooks/useGetExitRequest';
 
 const REASONS = [
     { value: 'personal', label: 'Personal Reasons' },
@@ -25,6 +24,34 @@ const REASONS = [
     { value: 'missed_payouts', label: 'Missed Payouts' },
     { value: 'other', label: 'Other' },
 ] as const;
+
+type ReasonValue = (typeof REASONS)[number]['value'];
+
+// ─── Eligibility helpers ──────────────────────────────────────────────────────
+
+const LOCK_IN_MONTHS = 6;
+
+/** Months elapsed since investment start date (0 if startDate missing) */
+function getMonthsElapsed(startDate?: Date): number {
+    if (!startDate) return 0;
+    const start = new Date(startDate);
+    const now = new Date();
+    return (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+}
+
+/** Whether the 6-month lock-in has been completed */
+function isLockInCompleted(investment: Investment): boolean {
+    return getMonthsElapsed(investment.startDate) >= LOCK_IN_MONTHS;
+}
+
+/**
+ * Earned income to date = principal × (returnRate / 100) × (monthsElapsed / 12)
+ * Simple pro-rata on annual rate.
+ */
+function computeEarnedToDate(investment: Investment): number {
+    const months = Math.min(getMonthsElapsed(investment.startDate), investment.durationMonths);
+    return Math.round(investment.investedAmount * (investment.returnRate / 100) * (months / 12));
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -69,6 +96,35 @@ function PolicyCard() {
     );
 }
 
+function EligibilityBadge({ investment }: { investment: Investment }) {
+    const eligible = isLockInCompleted(investment);
+    const monthsElapsed = getMonthsElapsed(investment.startDate);
+    const monthsRemaining = Math.max(0, LOCK_IN_MONTHS - monthsElapsed);
+
+    return (
+        <View
+            style={[
+                styles.eligibilityBadge,
+                { borderColor: eligible ? Colors.accentGreen : Colors.warning },
+            ]}
+        >
+            <Ionicons
+                name={eligible ? 'checkmark-circle-outline' : 'time-outline'}
+                size={14}
+                color={eligible ? Colors.accentGreen : Colors.warning}
+            />
+            <Text
+                style={[
+                    styles.eligibilityText,
+                    { color: eligible ? Colors.accentGreen : Colors.warning },
+                ]}
+            >
+                {eligible ? 'Eligible for Exit' : `${monthsRemaining}mo lock-in remaining`}
+            </Text>
+        </View>
+    );
+}
+
 function InvestmentSelectCard({
     investment,
     selected,
@@ -78,17 +134,23 @@ function InvestmentSelectCard({
     selected: boolean;
     onSelect: () => void;
 }) {
+    const eligible = isLockInCompleted(investment);
+
     return (
         <TouchableOpacity
-            style={[styles.invSelectCard, selected && styles.invSelectCardActive]}
-            onPress={onSelect}
-            activeOpacity={0.8}
+            style={[
+                styles.invSelectCard,
+                selected && styles.invSelectCardActive,
+                !eligible && styles.invSelectCardDisabled,
+            ]}
+            onPress={eligible ? onSelect : undefined}
+            activeOpacity={eligible ? 0.8 : 1}
         >
             <View style={styles.invSelectLeft}>
                 <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
                     {selected && <View style={styles.radioInner} />}
                 </View>
-                <View>
+                <View style={{ gap: 4 }}>
                     <Text style={styles.invSelectName}>{investment.planName}</Text>
                     <Text style={styles.invSelectMeta}>
                         ₹{investment.investedAmount.toLocaleString()} • {investment.planType} •{' '}
@@ -103,12 +165,22 @@ function InvestmentSelectCard({
                             {investment.status}
                         </Text>
                     </Text>
+                    <EligibilityBadge investment={investment} />
                 </View>
             </View>
             <View style={styles.invSelectRight}>
                 <Text style={styles.invSelectReturn}>{investment.returnRate}% p.a.</Text>
             </View>
         </TouchableOpacity>
+    );
+}
+
+function SkeletonCard() {
+    return (
+        <View style={styles.emptyCard}>
+            <View style={styles.skeletonLine} />
+            <View style={[styles.skeletonLine, styles.skeletonLineSm]} />
+        </View>
     );
 }
 
@@ -170,19 +242,89 @@ function ExitRequestCard({ req }: { req: ExitRequest }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ExitRequestScreen({ navigation }: any) {
+    const {
+        data: investmentData,
+        isLoading: loadingInvestments,
+        refetch: refetchInvestments,
+        isRefetching: refetchingInvestments,
+    } = useGetMyInvestment();
+
+    const {
+        data: exitRequestData,
+        isLoading: loadingExitRequests,
+        isRefetching: refetchingExitRequests,
+        refetch: refetchExitRequests,
+    } = useGetExitRequest();
+
     const [selectedInvId, setSelectedInvId] = useState<string | null>(null);
-    const [reason, setReason] = useState<string>('personal');
+    const [reason, setReason] = useState<ReasonValue>('personal');
     const [reasonDetails, setReasonDetails] = useState('');
     const [bankDetails, setBankDetails] = useState<BankDetails>({});
     const [showForm, setShowForm] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const openDrawer = () => navigation.openDrawer();
 
-    const selectedInv = mockInvestments.find(i => i._id === selectedInvId);
+    // Real data from hooks
+    const investments: Investment[] = investmentData ?? [];
+    const exitRequests: ExitRequest[] = exitRequestData ?? [];
 
-    const handleSubmit = () => {
-        // submit logic here
-        setShowForm(false);
+    const activeInvestments = investments.filter(i => ['active', 'pending'].includes(i.status));
+    const selectedInv = investments.find(i => i._id === selectedInvId);
+
+    // Validate bank details before submission
+    const isBankDetailsValid = () => {
+        const { accountHolderName, accountNumber, ifscCode, bankName } = bankDetails;
+        return (
+            accountHolderName?.trim() &&
+            accountNumber?.trim() &&
+            ifscCode?.trim() &&
+            bankName?.trim()
+        );
+    };
+
+    const handleSubmit = async () => {
+        if (!selectedInv) return;
+
+        if (!isBankDetailsValid()) {
+            Alert.alert('Missing Details', 'Please fill in all bank details before submitting.');
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            // TODO: replace with your actual API call, e.g.:
+            // await submitExitRequest({
+            //     investment: selectedInv._id!,
+            //     reason,
+            //     reasonDetails,
+            //     bankDetails,
+            // });
+            Alert.alert(
+                'Request Submitted',
+                'Your exit request has been submitted. It will be reviewed within 2-3 business days.',
+                [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setShowForm(false);
+                            setSelectedInvId(null);
+                            setReasonDetails('');
+                            setBankDetails({});
+                            setReason('personal');
+                            refetchExitRequests();
+                        },
+                    },
+                ],
+            );
+        } catch (error: any) {
+            Alert.alert(
+                'Submission Failed',
+                error?.message ?? 'Something went wrong. Please try again.',
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -197,25 +339,35 @@ export default function ExitRequestScreen({ navigation }: any) {
                     {/* Select Investment */}
                     <View>
                         <Text style={styles.sectionTitle}>Select Investment to Exit</Text>
-                        {mockInvestments.length === 0 ? (
-                            <View style={styles.emptyCard}>
-                                <View style={styles.skeletonLine} />
-                                <View style={[styles.skeletonLine, styles.skeletonLineSm]} />
+
+                        {loadingInvestments || refetchingInvestments ? (
+                            <>
+                                <SkeletonCard />
+                                <SkeletonCard />
+                            </>
+                        ) : activeInvestments.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <Ionicons
+                                    name="wallet-outline"
+                                    size={32}
+                                    color={Colors.textMuted}
+                                />
+                                <Text style={styles.emptyStateText}>
+                                    No active investments found
+                                </Text>
                             </View>
                         ) : (
-                            mockInvestments
-                                .filter(i => ['active', 'pending'].includes(i.status))
-                                .map(inv => (
-                                    <InvestmentSelectCard
-                                        key={inv._id}
-                                        investment={inv}
-                                        selected={selectedInvId === inv._id}
-                                        onSelect={() => {
-                                            setSelectedInvId(inv._id ?? null);
-                                            setShowForm(true);
-                                        }}
-                                    />
-                                ))
+                            activeInvestments.map(inv => (
+                                <InvestmentSelectCard
+                                    key={inv._id}
+                                    investment={inv}
+                                    selected={selectedInvId === inv._id}
+                                    onSelect={() => {
+                                        setSelectedInvId(inv._id ?? null);
+                                        setShowForm(true);
+                                    }}
+                                />
+                            ))
                         )}
                     </View>
 
@@ -311,54 +463,92 @@ export default function ExitRequestScreen({ navigation }: any) {
                             </View>
 
                             {/* Summary */}
-                            <View style={styles.summaryBox}>
-                                <Text style={styles.summaryTitle}>Refund Estimate</Text>
-                                <View style={styles.summaryRow}>
-                                    <Text style={styles.summaryLabel}>Invested Amount</Text>
-                                    <Text style={styles.summaryValue}>
-                                        ₹{selectedInv.investedAmount.toLocaleString()}
+                            {(() => {
+                                const earned = computeEarnedToDate(selectedInv);
+                                const total = selectedInv.investedAmount + earned;
+                                return (
+                                    <View style={styles.summaryBox}>
+                                        <Text style={styles.summaryTitle}>Refund Estimate</Text>
+                                        <View style={styles.summaryRow}>
+                                            <Text style={styles.summaryLabel}>Invested Amount</Text>
+                                            <Text style={styles.summaryValue}>
+                                                ₹{selectedInv.investedAmount.toLocaleString()}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.summaryRow}>
+                                            <Text style={styles.summaryLabel}>Earned to Date</Text>
+                                            <Text
+                                                style={[
+                                                    styles.summaryValue,
+                                                    { color: Colors.accentGreen },
+                                                ]}
+                                            >
+                                                ₹{earned.toLocaleString()}
+                                            </Text>
+                                        </View>
+                                        <View style={[styles.summaryRow, styles.summaryTotal]}>
+                                            <Text style={styles.summaryTotalLabel}>
+                                                Estimated Total
+                                            </Text>
+                                            <Text style={styles.summaryTotalValue}>
+                                                ₹{total.toLocaleString()}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                );
+                            })()}
+
+                            {/* Eligibility warning if lock-in not completed */}
+                            {!isLockInCompleted(selectedInv) && (
+                                <View style={styles.warningBox}>
+                                    <Ionicons
+                                        name="warning-outline"
+                                        size={16}
+                                        color={Colors.warning}
+                                    />
+                                    <Text style={styles.warningText}>
+                                        This investment has not completed the 6-month lock-in period
+                                        ({getMonthsElapsed(selectedInv.startDate)} of{' '}
+                                        {LOCK_IN_MONTHS} months done). Your request may be rejected.
                                     </Text>
                                 </View>
-                                <View style={styles.summaryRow}>
-                                    <Text style={styles.summaryLabel}>Earned to Date</Text>
-                                    <Text
-                                        style={[styles.summaryValue, { color: Colors.accentGreen }]}
-                                    >
-                                        ₹0
-                                    </Text>
-                                </View>
-                                <View style={[styles.summaryRow, styles.summaryTotal]}>
-                                    <Text style={styles.summaryTotalLabel}>Estimated Total</Text>
-                                    <Text style={styles.summaryTotalValue}>
-                                        ₹{selectedInv.investedAmount.toLocaleString()}
-                                    </Text>
-                                </View>
-                            </View>
+                            )}
 
                             <TouchableOpacity
-                                style={styles.submitBtn}
+                                style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
                                 onPress={handleSubmit}
                                 activeOpacity={0.85}
+                                disabled={isSubmitting}
                             >
-                                <Ionicons
-                                    name="log-out-outline"
-                                    size={16}
-                                    color={Colors.textInverse}
-                                />
-                                <Text style={styles.submitBtnText}>Submit Exit Request</Text>
+                                {isSubmitting ? (
+                                    <ActivityIndicator size="small" color={Colors.textPrimary} />
+                                ) : (
+                                    <>
+                                        <Ionicons
+                                            name="log-out-outline"
+                                            size={16}
+                                            color={Colors.textInverse}
+                                        />
+                                        <Text style={styles.submitBtnText}>
+                                            Submit Exit Request
+                                        </Text>
+                                    </>
+                                )}
                             </TouchableOpacity>
                         </View>
                     )}
 
                     {/* Past Requests */}
-                    {mockExitRequests.length > 0 && (
+                    {loadingExitRequests || refetchingExitRequests ? (
+                        <SkeletonCard />
+                    ) : exitRequests.length > 0 ? (
                         <View>
                             <Text style={styles.sectionTitle}>Previous Exit Requests</Text>
-                            {mockExitRequests.map(req => (
+                            {exitRequests.map(req => (
                                 <ExitRequestCard key={req._id} req={req} />
                             ))}
                         </View>
-                    )}
+                    ) : null}
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -433,6 +623,7 @@ const styles = StyleSheet.create({
         borderColor: Colors.border,
         padding: Spacing.md,
         gap: Spacing.sm,
+        marginBottom: Spacing.sm,
     },
     skeletonLine: {
         height: 14,
@@ -441,6 +632,36 @@ const styles = StyleSheet.create({
         width: '60%',
     },
     skeletonLineSm: { width: '80%' },
+
+    emptyState: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: Spacing.xl,
+        gap: Spacing.sm,
+        backgroundColor: Colors.bgCard,
+        borderRadius: Radius.lg,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    emptyStateText: {
+        fontSize: Typography.fontSizeSM,
+        color: Colors.textMuted,
+    },
+
+    eligibilityBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        borderWidth: 1,
+        borderRadius: Radius.full,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 2,
+        alignSelf: 'flex-start',
+    },
+    eligibilityText: {
+        fontSize: Typography.fontSizeXS,
+        fontWeight: Typography.fontWeightSemiBold,
+    },
 
     invSelectCard: {
         flexDirection: 'row',
@@ -456,6 +677,9 @@ const styles = StyleSheet.create({
     invSelectCardActive: {
         borderColor: Colors.accentGreen,
         backgroundColor: Colors.bgElevated,
+    },
+    invSelectCardDisabled: {
+        opacity: 0.55,
     },
     invSelectLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
     radioOuter: {
@@ -586,6 +810,23 @@ const styles = StyleSheet.create({
         color: Colors.accentGreen,
     },
 
+    warningBox: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
+        backgroundColor: '#2A1A00',
+        borderRadius: Radius.md,
+        borderWidth: 1,
+        borderColor: Colors.warning,
+        padding: Spacing.md,
+    },
+    warningText: {
+        flex: 1,
+        fontSize: Typography.fontSizeXS,
+        color: Colors.warning,
+        lineHeight: 18,
+    },
+
     submitBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -594,6 +835,9 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.error,
         borderRadius: Radius.md,
         paddingVertical: Spacing.sm + 4,
+    },
+    submitBtnDisabled: {
+        opacity: 0.6,
     },
     submitBtnText: {
         fontSize: Typography.fontSizeMD,

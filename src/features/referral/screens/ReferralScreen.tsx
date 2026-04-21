@@ -9,15 +9,41 @@ import {
     StatusBar,
     Share,
     Clipboard,
+    ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@theme/index';
 import { Referral } from '../types/Referal';
+import { useGetRerrals } from '../hooks/useGetRerrals';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const mockReferrals: Referral[] = [];
-const mockReferralCode = 'ABN-INV2024';
-const mockReferralLink = `https://abnecogrm.com/ref/${mockReferralCode}`;
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+/**
+ * The API populates `referred` as a user object rather than a bare ID string.
+ * We extend the base Referral type locally to reflect the actual response shape.
+ */
+interface ReferredUser {
+    _id: string;
+    name: string;
+    email: string;
+    createdAt: string;
+}
+
+interface PopulatedReferral extends Omit<Referral, 'referred'> {
+    referred: ReferredUser;
+}
+
+interface ReferralApiResponse {
+    success: boolean;
+    referralCode: string;
+    referralLink: string;
+    referrals: PopulatedReferral[];
+    stats: {
+        total: number;
+        active: number;
+        totalEarned: number;
+    };
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -59,7 +85,19 @@ function StatCard({
     );
 }
 
-function ReferralMemberRow({ referral }: { referral: Referral }) {
+function SkeletonMemberRow() {
+    return (
+        <View style={styles.memberRow}>
+            <View style={[styles.memberAvatar, { backgroundColor: Colors.bgElevated }]} />
+            <View style={{ flex: 1, gap: Spacing.xs }}>
+                <View style={styles.skeletonLine} />
+                <View style={[styles.skeletonLine, { width: '45%' }]} />
+            </View>
+        </View>
+    );
+}
+
+function ReferralMemberRow({ referral }: { referral: PopulatedReferral }) {
     const statusColor =
         referral.status === 'active'
             ? Colors.success
@@ -67,27 +105,40 @@ function ReferralMemberRow({ referral }: { referral: Referral }) {
             ? Colors.warning
             : Colors.textMuted;
 
+    const joinedDate = referral.referred?.createdAt
+        ? new Date(referral.referred.createdAt).toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+          })
+        : referral.createdAt
+        ? new Date(referral.createdAt).toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+          })
+        : '—';
+
     return (
         <View style={styles.memberRow}>
             <View style={styles.memberAvatar}>
-                <Ionicons name="person-outline" size={16} color={Colors.accentGreen} />
+                <Text style={styles.memberAvatarText}>
+                    {referral.referred?.name?.charAt(0).toUpperCase() ?? '?'}
+                </Text>
             </View>
             <View style={styles.memberInfo}>
                 <Text style={styles.memberId}>
-                    {referral.referred?.slice(-8).toUpperCase() ?? 'UNKNOWN'}
+                    {referral.referred?.name ??
+                        referral.referred?._id?.slice(-8).toUpperCase() ??
+                        'Unknown'}
                 </Text>
-                <Text style={styles.memberDate}>
-                    {referral.createdAt
-                        ? new Date(referral.createdAt).toLocaleDateString('en-IN', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                          })
-                        : '—'}
+                <Text style={styles.memberEmail} numberOfLines={1}>
+                    {referral.referred?.email ?? '—'}
                 </Text>
+                <Text style={styles.memberDate}>Joined {joinedDate}</Text>
             </View>
             <View style={styles.memberRight}>
-                <Text style={styles.memberEarned}>₹{referral.totalEarned}</Text>
+                <Text style={styles.memberEarned}>₹{referral.totalEarned.toLocaleString()}</Text>
                 <View style={[styles.memberStatusBadge, { borderColor: statusColor }]}>
                     <Text style={[styles.memberStatusText, { color: statusColor }]}>
                         {referral.status}
@@ -101,24 +152,45 @@ function ReferralMemberRow({ referral }: { referral: Referral }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ReferralScreen({ navigation }: any) {
+    const {
+        data: referralData,
+        isLoading,
+        isRefetching,
+        refetch,
+    } = useGetRerrals() as {
+        data: ReferralApiResponse | undefined;
+        isLoading: boolean;
+        isRefetching: boolean;
+        refetch: () => void;
+    };
+
     const [copied, setCopied] = useState(false);
     const openDrawer = () => navigation.openDrawer();
 
+    const referralLink = referralData?.referralLink ?? '';
+    const referralCode = referralData?.referralCode ?? '';
+    const referrals: PopulatedReferral[] = referralData?.referrals ?? [];
+    const stats = referralData?.stats;
+
+    // Fall back to computing from referrals array if stats not present
+    const totalReferred = stats?.total ?? referrals.length;
+    const activeAccounts = stats?.active ?? referrals.filter(r => r.status === 'active').length;
+    const totalEarned = stats?.totalEarned ?? referrals.reduce((s, r) => s + r.totalEarned, 0);
+
     const handleCopy = () => {
-        Clipboard.setString(mockReferralLink);
+        Clipboard.setString(referralLink);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
     const handleShare = async () => {
+        if (!referralLink) return;
         await Share.share({
-            message: `Join ABN Ecogram using my referral link and start investing!\n${mockReferralLink}`,
+            message: `Join ABN Ecogram using my referral link and start investing!\n${referralLink}`,
         });
     };
 
-    const totalReferred = mockReferrals.length;
-    const activeAccounts = mockReferrals.filter(r => r.status === 'active').length;
-    const totalEarned = mockReferrals.reduce((s, r) => s + r.totalEarned, 0);
+    const isLoadingAny = isLoading || isRefetching;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -136,17 +208,17 @@ export default function ReferralScreen({ navigation }: any) {
                         label="Total Referred"
                     />
                     <StatCard
-                        icon="checkmark-outline"
+                        icon="checkmark-circle-outline"
                         iconColor={Colors.accentGreen}
                         bgColor={Colors.bgElevated}
                         value={`${activeAccounts}`}
                         label="Active Accounts"
                     />
                     <StatCard
-                        icon="logo-usd"
+                        icon="wallet-outline"
                         iconColor={Colors.warning}
                         bgColor="#2A2000"
-                        value={`₹${totalEarned}`}
+                        value={`₹${totalEarned.toLocaleString()}`}
                         label="Total Earned"
                     />
                 </View>
@@ -167,14 +239,19 @@ export default function ReferralScreen({ navigation }: any) {
                         <View style={styles.linkRow}>
                             <View style={styles.linkBox}>
                                 <Ionicons name="link-outline" size={14} color={Colors.textMuted} />
-                                <Text style={styles.linkText} numberOfLines={1}>
-                                    {mockReferralLink}
-                                </Text>
+                                {isLoadingAny ? (
+                                    <View style={[styles.skeletonLine, { flex: 1 }]} />
+                                ) : (
+                                    <Text style={styles.linkText} numberOfLines={1}>
+                                        {referralLink || 'Loading...'}
+                                    </Text>
+                                )}
                             </View>
                             <TouchableOpacity
                                 style={[styles.copyBtn, copied && styles.copyBtnCopied]}
                                 onPress={handleCopy}
                                 activeOpacity={0.85}
+                                disabled={!referralLink}
                             >
                                 <Ionicons
                                     name={copied ? 'checkmark' : 'copy-outline'}
@@ -190,10 +267,15 @@ export default function ReferralScreen({ navigation }: any) {
                         {/* Code + hint */}
                         <View style={styles.codeRow}>
                             <Text style={styles.codeLabel}>Your code:</Text>
-                            <View style={styles.codeBadge}>
-                                <Text style={styles.codeText}>{mockReferralCode}</Text>
-                            </View>
+                            {isLoadingAny ? (
+                                <View style={[styles.skeletonLine, { width: 100 }]} />
+                            ) : (
+                                <View style={styles.codeBadge}>
+                                    <Text style={styles.codeText}>{referralCode || '—'}</Text>
+                                </View>
+                            )}
                         </View>
+
                         <Text style={styles.hintText}>
                             Share this link — earn 1% monthly on their active investment,
                             auto-credited to your wallet.
@@ -201,9 +283,10 @@ export default function ReferralScreen({ navigation }: any) {
 
                         {/* Share button */}
                         <TouchableOpacity
-                            style={styles.shareBtn}
+                            style={[styles.shareBtn, !referralLink && styles.shareBtnDisabled]}
                             onPress={handleShare}
                             activeOpacity={0.85}
+                            disabled={!referralLink}
                         >
                             <Ionicons name="share-outline" size={16} color={Colors.accentGreen} />
                             <Text style={styles.shareBtnText}>Share with Friends</Text>
@@ -239,7 +322,12 @@ export default function ReferralScreen({ navigation }: any) {
                     </View>
 
                     <View style={styles.card}>
-                        {mockReferrals.length === 0 ? (
+                        {isLoadingAny ? (
+                            <>
+                                <SkeletonMemberRow />
+                                <SkeletonMemberRow />
+                            </>
+                        ) : referrals.length === 0 ? (
                             <View style={styles.emptyState}>
                                 <Ionicons
                                     name="people-outline"
@@ -252,7 +340,7 @@ export default function ReferralScreen({ navigation }: any) {
                                 </Text>
                             </View>
                         ) : (
-                            mockReferrals.map(r => <ReferralMemberRow key={r._id} referral={r} />)
+                            referrals.map(r => <ReferralMemberRow key={r._id} referral={r} />)
                         )}
                     </View>
                 </View>
@@ -285,6 +373,13 @@ const styles = StyleSheet.create({
         fontSize: Typography.fontSizeSM,
         color: Colors.textSecondary,
         marginTop: 2,
+    },
+
+    skeletonLine: {
+        height: 13,
+        borderRadius: Radius.sm,
+        backgroundColor: Colors.bgElevated,
+        width: '70%',
     },
 
     statsRow: {
@@ -420,6 +515,9 @@ const styles = StyleSheet.create({
         paddingVertical: Spacing.sm + 2,
         marginTop: Spacing.xs,
     },
+    shareBtnDisabled: {
+        opacity: 0.4,
+    },
     shareBtnText: {
         fontSize: Typography.fontSizeMD,
         fontWeight: Typography.fontWeightSemiBold,
@@ -452,7 +550,11 @@ const styles = StyleSheet.create({
         fontWeight: Typography.fontWeightBold,
         color: Colors.accentGreen,
     },
-    stepText: { flex: 1, fontSize: Typography.fontSizeSM, color: Colors.textSecondary },
+    stepText: {
+        flex: 1,
+        fontSize: Typography.fontSizeSM,
+        color: Colors.textSecondary,
+    },
 
     card: {
         backgroundColor: Colors.bgCard,
@@ -485,15 +587,24 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: Radius.full,
-        backgroundColor: Colors.bgElevated,
+        backgroundColor: Colors.accentMuted,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    memberInfo: { flex: 1 },
+    memberAvatarText: {
+        fontSize: Typography.fontSizeMD,
+        fontWeight: Typography.fontWeightBold,
+        color: Colors.accentGreen,
+    },
+    memberInfo: { flex: 1, gap: 1 },
     memberId: {
         fontSize: Typography.fontSizeSM,
         fontWeight: Typography.fontWeightSemiBold,
         color: Colors.textPrimary,
+    },
+    memberEmail: {
+        fontSize: Typography.fontSizeXS,
+        color: Colors.textSecondary,
     },
     memberDate: { fontSize: Typography.fontSizeXS, color: Colors.textMuted },
     memberRight: { alignItems: 'flex-end', gap: 4 },

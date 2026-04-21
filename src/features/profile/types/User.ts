@@ -22,3 +22,9 @@ export interface User {
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+export interface UpdateUser {
+  email: string;
+  name: string;
+  phone: string;
+}

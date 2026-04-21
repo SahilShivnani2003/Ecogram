@@ -11,11 +11,10 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@theme/index';
 import { Booking } from '../types/Booking';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const mockBookings: Booking[] = [];
+import { useGetMyBookings } from '../hooks/useGetMyBookings';
 
 const STATUS_FILTERS = ['All', 'pending', 'confirmed', 'completed', 'cancelled'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -36,16 +35,30 @@ function ScreenHeader({ onMenuPress }: { onMenuPress: () => void }) {
     );
 }
 
+function SkeletonBookingCard() {
+    return (
+        <View style={styles.bookingCard}>
+            <View style={styles.bookingCardTop}>
+                <View style={[styles.resortIconWrap, { backgroundColor: Colors.bgElevated }]} />
+                <View style={{ flex: 1, gap: Spacing.xs }}>
+                    <View style={styles.skeletonLine} />
+                    <View style={[styles.skeletonLine, { width: '50%' }]} />
+                </View>
+            </View>
+            <View style={[styles.bookingDetails, { minHeight: 48 }]} />
+        </View>
+    );
+}
+
 function BookingCard({ booking }: { booking: Booking }) {
-    const statusColors: Record<string, string> = {
+    const statusColors: Record<Booking['status'], string> = {
         confirmed: Colors.success,
         pending: Colors.warning,
         cancelled: Colors.error,
         completed: Colors.textMuted,
     };
-    const color = statusColors[booking.status] ?? Colors.textMuted;
+    const color = statusColors[booking.status];
 
-    const nights = booking.totalNights;
     const checkInDate = new Date(booking.checkIn).toLocaleDateString('en-IN', {
         day: 'numeric',
         month: 'short',
@@ -84,7 +97,7 @@ function BookingCard({ booking }: { booking: Booking }) {
                 <View style={styles.detailDivider} />
                 <View style={styles.bookingDetailItem}>
                     <Text style={styles.bookingDetailLabel}>Nights</Text>
-                    <Text style={styles.bookingDetailValue}>{nights}</Text>
+                    <Text style={styles.bookingDetailValue}>{booking.totalNights}</Text>
                 </View>
                 <View style={styles.detailDivider} />
                 <View style={styles.bookingDetailItem}>
@@ -103,7 +116,9 @@ function BookingCard({ booking }: { booking: Booking }) {
                                 color:
                                     booking.paymentStatus === 'paid'
                                         ? Colors.success
-                                        : Colors.warning,
+                                        : booking.paymentStatus === 'refunded'
+                                        ? Colors.warning
+                                        : Colors.error,
                             },
                         ]}
                     >
@@ -111,6 +126,16 @@ function BookingCard({ booking }: { booking: Booking }) {
                     </Text>
                 </View>
             </View>
+
+            {/* Guest details summary */}
+            {booking.guestDetails && booking.guestDetails.length > 0 && (
+                <View style={styles.guestRow}>
+                    <Ionicons name="people-outline" size={13} color={Colors.textMuted} />
+                    <Text style={styles.guestText}>
+                        {booking.guestDetails.map(g => g.name).join(', ')}
+                    </Text>
+                </View>
+            )}
 
             {booking.specialRequests ? (
                 <Text style={styles.specialReq} numberOfLines={1}>
@@ -136,11 +161,17 @@ function EmptyState({ onBrowse }: { onBrowse: () => void }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function BookingsScreen({ navigation }: any) {
-    const [activeFilter, setActiveFilter] = useState<string>('All');
+    const { data: myBookings, isLoading, refetch, isRefetching } = useGetMyBookings();
+
+    const [activeFilter, setActiveFilter] = useState<StatusFilter>('All');
     const openDrawer = () => navigation.openDrawer();
 
+    const bookings: Booking[] = myBookings ?? [];
+
     const filtered =
-        activeFilter === 'All' ? mockBookings : mockBookings.filter(b => b.status === activeFilter);
+        activeFilter === 'All' ? bookings : bookings.filter(b => b.status === activeFilter);
+
+    const isLoadingAny = isLoading || isRefetching;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -154,24 +185,35 @@ export default function BookingsScreen({ navigation }: any) {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.statsStrip}
                 >
-                    {[
-                        { label: 'Total', value: mockBookings.length, icon: 'calendar' },
-                        {
-                            label: 'Confirmed',
-                            value: mockBookings.filter(b => b.status === 'confirmed').length,
-                            icon: 'checkmark-circle',
-                        },
-                        {
-                            label: 'Pending',
-                            value: mockBookings.filter(b => b.status === 'pending').length,
-                            icon: 'time-outline',
-                        },
-                        {
-                            label: 'Completed',
-                            value: mockBookings.filter(b => b.status === 'completed').length,
-                            icon: 'trophy-outline',
-                        },
-                    ].map(stat => (
+                    {(
+                        [
+                            {
+                                label: 'Total',
+                                value: bookings.length,
+                                icon: 'calendar',
+                            },
+                            {
+                                label: 'Confirmed',
+                                value: bookings.filter(b => b.status === 'confirmed').length,
+                                icon: 'checkmark-circle',
+                            },
+                            {
+                                label: 'Pending',
+                                value: bookings.filter(b => b.status === 'pending').length,
+                                icon: 'time-outline',
+                            },
+                            {
+                                label: 'Completed',
+                                value: bookings.filter(b => b.status === 'completed').length,
+                                icon: 'trophy-outline',
+                            },
+                            {
+                                label: 'Cancelled',
+                                value: bookings.filter(b => b.status === 'cancelled').length,
+                                icon: 'close-circle-outline',
+                            },
+                        ] as const
+                    ).map(stat => (
                         <View key={stat.label} style={styles.statPill}>
                             <Ionicons
                                 name={stat.icon as any}
@@ -211,9 +253,15 @@ export default function BookingsScreen({ navigation }: any) {
                     ))}
                 </ScrollView>
 
-                {/* Booking list / empty */}
+                {/* Booking list / empty / loading */}
                 <View style={styles.listContainer}>
-                    {filtered.length === 0 ? (
+                    {isLoadingAny ? (
+                        <>
+                            <SkeletonBookingCard />
+                            <SkeletonBookingCard />
+                            <SkeletonBookingCard />
+                        </>
+                    ) : filtered.length === 0 ? (
                         <View style={styles.emptyCard}>
                             <EmptyState onBrowse={() => navigation.navigate('Resorts')} />
                         </View>
@@ -259,6 +307,13 @@ const styles = StyleSheet.create({
         fontSize: Typography.fontSize2XL,
         fontWeight: Typography.fontWeightBold,
         color: Colors.textPrimary,
+    },
+
+    skeletonLine: {
+        height: 13,
+        borderRadius: Radius.sm,
+        backgroundColor: Colors.bgElevated,
+        width: '70%',
     },
 
     statsStrip: {
@@ -395,6 +450,17 @@ const styles = StyleSheet.create({
         width: 1,
         backgroundColor: Colors.border,
         marginVertical: 2,
+    },
+
+    guestRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
+    guestText: {
+        flex: 1,
+        fontSize: Typography.fontSizeXS,
+        color: Colors.textMuted,
     },
 
     specialReq: {

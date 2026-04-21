@@ -9,84 +9,15 @@ import {
     StatusBar,
     Image,
     TextInput,
+    ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@theme/index';
 import { Resort } from '../types/Resort';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const mockResorts: Resort[] = [
-    {
-        _id: '1',
-        name: 'Green Valley Eco Lodge',
-        description: 'A serene eco-lodge nestled in the hills with stunning valley views.',
-        location: {
-            address: '12 Hill Road',
-            city: 'Coorg',
-            state: 'Karnataka',
-            pincode: '571201',
-        },
-        pricePerNight: 3500,
-        images: [],
-        amenities: ['WiFi', 'Breakfast', 'Pool'],
-        facilities: {
-            roomFeatures: ['AC', 'TV'],
-            propertyFeatures: ['Pool', 'Gym'],
-            parking: true,
-            petFriendly: false,
-        },
-        checkIn: '2:00 PM',
-        checkOut: '11:00 AM',
-        policies: {
-            cancellation: 'Free cancellation 48hrs before',
-            childPolicy: 'Children allowed',
-            extraBedPolicy: 'Extra bed on request',
-        },
-        maxGuests: 2,
-        rooms: 1,
-        isAvailable: true,
-        rating: 4.5,
-        totalReviews: 32,
-        featured: true,
-        category: 'eco',
-    },
-    {
-        _id: '2',
-        name: 'Luxury Mountain Retreat',
-        description: 'Experience luxury with panoramic mountain views and world-class amenities.',
-        location: {
-            address: 'Meadow Lane',
-            city: 'Manali',
-            state: 'Himachal Pradesh',
-            pincode: '175131',
-        },
-        pricePerNight: 8000,
-        images: [],
-        amenities: ['WiFi', 'Spa', 'Pool', 'Restaurant'],
-        facilities: {
-            roomFeatures: ['AC', 'TV', 'Minibar'],
-            propertyFeatures: ['Pool', 'Spa', 'Gym', 'Restaurant'],
-            parking: true,
-            petFriendly: true,
-        },
-        checkIn: '3:00 PM',
-        checkOut: '12:00 PM',
-        policies: {
-            cancellation: 'Free cancellation 72hrs before',
-            childPolicy: 'Children above 5 allowed',
-            extraBedPolicy: 'Extra bed available at ₹500/night',
-        },
-        maxGuests: 4,
-        rooms: 2,
-        isAvailable: true,
-        rating: 4.8,
-        totalReviews: 87,
-        featured: true,
-        category: 'luxury',
-    },
-];
+import { useGetAllResorts } from '../hooks/useGetAllResorts';
 
 const CATEGORIES = ['All', 'luxury', 'eco', 'adventure', 'budget'] as const;
+type Category = (typeof CATEGORIES)[number];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -106,19 +37,60 @@ function ScreenHeader({ onMenuPress }: { onMenuPress: () => void }) {
     );
 }
 
-function ResortCard({ resort, onBook }: { resort: Resort; onBook: (r: Resort) => void }) {
+function SkeletonResortCard() {
     return (
         <View style={styles.resortCard}>
-            {/* Image placeholder */}
+            <View style={[styles.resortImageWrap, { backgroundColor: Colors.bgElevated }]} />
+            <View style={styles.resortBody}>
+                <View style={styles.skeletonLine} />
+                <View style={[styles.skeletonLine, { width: '60%' }]} />
+                <View style={[styles.skeletonLine, { width: '80%', marginTop: Spacing.xs }]} />
+            </View>
+        </View>
+    );
+}
+
+function ResortCard({ resort, onBook }: { resort: Resort; onBook: (r: Resort) => void }) {
+    const hasImage = resort.images && resort.images.length > 0;
+
+    return (
+        <View style={[styles.resortCard, !resort.isAvailable && styles.resortCardUnavailable]}>
+            {/* Image */}
             <View style={styles.resortImageWrap}>
-                <View style={styles.resortImagePlaceholder}>
-                    <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
-                </View>
+                {hasImage ? (
+                    <Image
+                        source={{ uri: resort.images[0] }}
+                        style={styles.resortImage}
+                        resizeMode="cover"
+                    />
+                ) : (
+                    <View style={styles.resortImagePlaceholder}>
+                        <Ionicons name="image-outline" size={32} color={Colors.textMuted} />
+                    </View>
+                )}
+
+                {/* Featured badge */}
+                {resort.featured && (
+                    <View style={styles.featuredBadge}>
+                        <Ionicons name="star" size={10} color="#FFD700" />
+                        <Text style={styles.featuredBadgeText}>Featured</Text>
+                    </View>
+                )}
+
+                {/* Category badge */}
                 <View style={styles.categoryBadge}>
                     <Text style={styles.categoryBadgeText}>
                         {resort.category.charAt(0).toUpperCase() + resort.category.slice(1)}
                     </Text>
                 </View>
+
+                {/* Unavailable overlay */}
+                {!resort.isAvailable && (
+                    <View style={styles.unavailableOverlay}>
+                        <Text style={styles.unavailableText}>Currently Unavailable</Text>
+                    </View>
+                )}
+
                 {/* Location overlay */}
                 <View style={styles.locationOverlay}>
                     <Ionicons name="location-outline" size={12} color={Colors.textPrimary} />
@@ -129,13 +101,18 @@ function ResortCard({ resort, onBook }: { resort: Resort; onBook: (r: Resort) =>
             </View>
 
             <View style={styles.resortBody}>
+                {/* Name + Rating */}
                 <View style={styles.resortNameRow}>
-                    <Text style={styles.resortName}>{resort.name}</Text>
+                    <Text style={styles.resortName} numberOfLines={1}>
+                        {resort.name}
+                    </Text>
                     <View style={styles.ratingRow}>
                         <Ionicons name="star" size={12} color={Colors.warning} />
-                        <Text style={styles.ratingText}>{resort.rating}</Text>
+                        <Text style={styles.ratingText}>{resort.rating.toFixed(1)}</Text>
+                        <Text style={styles.reviewCount}>({resort.totalReviews})</Text>
                     </View>
                 </View>
+
                 <Text style={styles.resortDesc} numberOfLines={2}>
                     {resort.description}
                 </Text>
@@ -148,11 +125,18 @@ function ResortCard({ resort, onBook }: { resort: Resort; onBook: (r: Resort) =>
                     </View>
                     <View style={styles.detailItem}>
                         <Ionicons name="bed-outline" size={13} color={Colors.textMuted} />
-                        <Text style={styles.detailText}>{resort.rooms} Room</Text>
+                        <Text style={styles.detailText}>{resort.rooms} Rooms</Text>
                     </View>
                     {resort.facilities.parking && (
                         <View style={styles.detailItem}>
-                            <Text style={styles.detailText}>P Parking</Text>
+                            <Ionicons name="car-outline" size={13} color={Colors.textMuted} />
+                            <Text style={styles.detailText}>Parking</Text>
+                        </View>
+                    )}
+                    {resort.facilities.petFriendly && (
+                        <View style={styles.detailItem}>
+                            <Ionicons name="paw-outline" size={13} color={Colors.textMuted} />
+                            <Text style={styles.detailText}>Pet Friendly</Text>
                         </View>
                     )}
                 </View>
@@ -172,7 +156,7 @@ function ResortCard({ resort, onBook }: { resort: Resort; onBook: (r: Resort) =>
                     </ScrollView>
                 )}
 
-                {/* Timing */}
+                {/* Check-in / Check-out */}
                 <Text style={styles.timingText}>
                     Check-in: <Text style={styles.timingValue}>{resort.checkIn}</Text>
                     {'   '}Check-out: <Text style={styles.timingValue}>{resort.checkOut}</Text>
@@ -187,12 +171,15 @@ function ResortCard({ resort, onBook }: { resort: Resort; onBook: (r: Resort) =>
                         </Text>
                     </View>
                     <TouchableOpacity
-                        style={styles.bookBtn}
-                        onPress={() => onBook(resort)}
-                        activeOpacity={0.85}
+                        style={[styles.bookBtn, !resort.isAvailable && styles.bookBtnDisabled]}
+                        onPress={() => resort.isAvailable && onBook(resort)}
+                        activeOpacity={resort.isAvailable ? 0.85 : 1}
+                        disabled={!resort.isAvailable}
                     >
                         <Ionicons name="calendar-outline" size={14} color={Colors.textInverse} />
-                        <Text style={styles.bookBtnText}>Book</Text>
+                        <Text style={styles.bookBtnText}>
+                            {resort.isAvailable ? 'Book' : 'Unavailable'}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -203,18 +190,27 @@ function ResortCard({ resort, onBook }: { resort: Resort; onBook: (r: Resort) =>
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ResortsScreen({ navigation }: any) {
+    const { data: allResorts, isLoading, refetch, isRefetching } = useGetAllResorts();
+
     const [search, setSearch] = useState('');
-    const [activeCategory, setActiveCategory] = useState('All');
+    const [activeCategory, setActiveCategory] = useState<Category>('All');
+
     const openDrawer = () => navigation.openDrawer();
 
-    const filtered = mockResorts.filter(r => {
+    const resorts: Resort[] = allResorts ?? [];
+
+    const filtered = resorts.filter(r => {
+        const q = search.toLowerCase();
         const matchSearch =
             !search ||
-            r.location.city.toLowerCase().includes(search.toLowerCase()) ||
-            r.name.toLowerCase().includes(search.toLowerCase());
+            r.location.city.toLowerCase().includes(q) ||
+            r.location.state.toLowerCase().includes(q) ||
+            r.name.toLowerCase().includes(q);
         const matchCat = activeCategory === 'All' || r.category === activeCategory;
         return matchSearch && matchCat;
     });
+
+    const isLoadingAny = isLoading || isRefetching;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -222,20 +218,26 @@ export default function ResortsScreen({ navigation }: any) {
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
                 <ScreenHeader onMenuPress={openDrawer} />
 
-                {/* Search + Filter */}
+                {/* Search */}
                 <View style={styles.searchRow}>
                     <View style={styles.searchWrap}>
                         <Ionicons name="search-outline" size={16} color={Colors.textMuted} />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search by city..."
+                            placeholder="Search by name or city..."
                             placeholderTextColor={Colors.textMuted}
                             value={search}
                             onChangeText={setSearch}
                         />
+                        {search.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearch('')}>
+                                <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                            </TouchableOpacity>
+                        )}
                     </View>
                 </View>
 
+                {/* Category filter */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -266,17 +268,28 @@ export default function ResortsScreen({ navigation }: any) {
 
                 {/* Resort list */}
                 <View style={styles.listContainer}>
-                    {filtered.length === 0 ? (
+                    {isLoadingAny ? (
+                        <>
+                            <SkeletonResortCard />
+                            <SkeletonResortCard />
+                            <SkeletonResortCard />
+                        </>
+                    ) : filtered.length === 0 ? (
                         <View style={styles.emptyCard}>
                             <Ionicons name="business-outline" size={36} color={Colors.textMuted} />
                             <Text style={styles.emptyText}>No resorts found</Text>
+                            {search.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearch('')}>
+                                    <Text style={styles.clearSearchText}>Clear search</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     ) : (
                         filtered.map(resort => (
                             <ResortCard
                                 key={resort._id}
                                 resort={resort}
-                                onBook={r => navigation.navigate('Bookings')}
+                                onBook={r => navigation.navigate('Bookings', { resortId: r._id })}
                             />
                         ))
                     )}
@@ -358,6 +371,14 @@ const styles = StyleSheet.create({
 
     listContainer: { paddingHorizontal: Spacing.lg, gap: Spacing.md },
 
+    skeletonLine: {
+        height: 14,
+        borderRadius: Radius.sm,
+        backgroundColor: Colors.bgElevated,
+        width: '90%',
+        marginBottom: Spacing.sm,
+    },
+
     resortCard: {
         backgroundColor: Colors.bgCard,
         borderRadius: Radius.lg,
@@ -366,10 +387,17 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         ...Shadow.card,
     },
+    resortCardUnavailable: {
+        opacity: 0.7,
+    },
 
     resortImageWrap: {
         height: 180,
         position: 'relative',
+    },
+    resortImage: {
+        width: '100%',
+        height: '100%',
     },
     resortImagePlaceholder: {
         flex: 1,
@@ -377,6 +405,27 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+
+    featuredBadge: {
+        position: 'absolute',
+        top: Spacing.sm,
+        left: Spacing.sm,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: 'rgba(0,0,0,0.65)',
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 3,
+        borderRadius: Radius.full,
+        borderWidth: 1,
+        borderColor: '#FFD700',
+    },
+    featuredBadgeText: {
+        fontSize: Typography.fontSizeXS,
+        color: '#FFD700',
+        fontWeight: Typography.fontWeightBold,
+    },
+
     categoryBadge: {
         position: 'absolute',
         top: Spacing.sm,
@@ -391,6 +440,20 @@ const styles = StyleSheet.create({
         color: Colors.textInverse,
         fontWeight: Typography.fontWeightBold,
     },
+
+    unavailableOverlay: {
+        ...StyleSheet.absoluteFill,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    unavailableText: {
+        fontSize: Typography.fontSizeSM,
+        fontWeight: Typography.fontWeightBold,
+        color: Colors.textPrimary,
+        letterSpacing: 0.5,
+    },
+
     locationOverlay: {
         position: 'absolute',
         bottom: Spacing.sm,
@@ -413,6 +476,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
+        gap: Spacing.sm,
     },
     resortName: {
         flex: 1,
@@ -434,6 +498,10 @@ const styles = StyleSheet.create({
         color: Colors.textPrimary,
         fontWeight: Typography.fontWeightBold,
     },
+    reviewCount: {
+        fontSize: Typography.fontSizeXS,
+        color: Colors.textMuted,
+    },
     resortDesc: {
         fontSize: Typography.fontSizeSM,
         color: Colors.textSecondary,
@@ -442,6 +510,7 @@ const styles = StyleSheet.create({
 
     detailsRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: Spacing.md,
     },
     detailItem: {
@@ -502,6 +571,10 @@ const styles = StyleSheet.create({
         paddingVertical: Spacing.sm,
         borderRadius: Radius.md,
     },
+    bookBtnDisabled: {
+        backgroundColor: Colors.bgElevated,
+        opacity: 0.6,
+    },
     bookBtnText: {
         fontSize: Typography.fontSizeMD,
         fontWeight: Typography.fontWeightBold,
@@ -521,5 +594,11 @@ const styles = StyleSheet.create({
         fontSize: Typography.fontSizeMD,
         color: Colors.textMuted,
         fontWeight: Typography.fontWeightMedium,
+    },
+    clearSearchText: {
+        fontSize: Typography.fontSizeSM,
+        color: Colors.accentGreen,
+        fontWeight: Typography.fontWeightSemiBold,
+        marginTop: Spacing.xs,
     },
 });

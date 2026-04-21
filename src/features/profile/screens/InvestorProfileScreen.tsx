@@ -9,31 +9,17 @@ import {
     StatusBar,
     TextInput,
     Alert,
+    Clipboard,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@theme/index';
-import { User, UserAddress } from '../types/User';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const mockUser: User = {
-    _id: 'usr_inv2024',
-    name: 'Investor 2',
-    email: 'investor2@gmail.com',
-    password: '',
-    phone: '+91 98765 43210',
-    role: 'investor',
-    isActive: true,
-    address: {
-        street: '12, MG Road',
-        city: 'Bengaluru',
-        state: 'Karnataka',
-        pincode: '560001',
-    },
-    referralCode: 'ABN-INV2024',
-    rewardPoints: 0,
-    cashbackReceived: false,
-    createdAt: new Date('2024-01-15'),
-};
+import { User, UserAddress, UpdateUser } from '../types/User';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useUpdateUser } from '../hooks/useUpdateUser';
+import { DrawerScreenProps } from '@react-navigation/drawer';
+import { InvestorDrawerParamList } from '@/types/InvestorDrawerParamList';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -160,18 +146,72 @@ function SectionCard({
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
+type profileScreenProps = DrawerScreenProps<InvestorDrawerParamList, 'Profile'>;
 
-export default function ProfileScreen({ navigation }: any) {
-    const [user, setUser] = useState<User>(mockUser);
-    const [address, setAddress] = useState<UserAddress>(mockUser.address ?? {});
+export default function ProfileScreen({ navigation }: profileScreenProps) {
+    const { user: userData, removeAuth } = useAuthStore();
+    const { mutate: updateUser, isPending: isSaving } = useUpdateUser();
+
+    // Guard: if no user in store yet, render nothing meaningful
+    if (!userData) return null;
+
+    const [phone, setPhone] = useState(userData.phone ?? '');
+    const [address, setAddress] = useState<UserAddress>(userData.address ?? {});
     const [editing, setEditing] = useState(false);
+    const [codeCopied, setCodeCopied] = useState(false);
 
     const openDrawer = () => navigation.openDrawer();
 
-    const handleSave = () => {
-        setUser(prev => ({ ...prev, address }));
+    const handleCopyCode = () => {
+        if (!userData.referralCode) return;
+        Clipboard.setString(userData.referralCode);
+        setCodeCopied(true);
+        setTimeout(() => setCodeCopied(false), 2000);
+    };
+
+    const handleCancel = () => {
+        // Reset editable fields back to the original store values
+        setPhone(userData.phone ?? '');
+        setAddress(userData.address ?? {});
         setEditing(false);
-        Alert.alert('Saved', 'Profile updated successfully.');
+    };
+
+    const handleSave = () => {
+        const payload: UpdateUser = {
+            email: userData.email,
+            name: userData.name,
+            phone,
+        };
+
+        updateUser(payload, {
+            onSuccess: () => {
+                setEditing(false);
+                Alert.alert('Saved', 'Profile updated successfully.');
+            },
+            onError: (err: any) => {
+                Alert.alert(
+                    'Update Failed',
+                    err?.message ?? 'Something went wrong. Please try again.',
+                );
+            },
+        });
+    };
+
+    const handleLogout = () => {
+        Alert.alert('Logout', 'Are you sure you want to logout?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Logout',
+                style: 'destructive',
+                onPress: () => {
+                    removeAuth();
+                    navigation.getParent<NativeStackNavigationProp<RootStackParamList>>().reset({
+                        index: 0,
+                        routes: [{ name: 'Login' }],
+                    });
+                },
+            },
+        ]);
     };
 
     return (
@@ -180,24 +220,25 @@ export default function ProfileScreen({ navigation }: any) {
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
                 <ScreenHeader onMenuPress={openDrawer} />
 
-                <AvatarSection user={user} />
-                <StatsStrip user={user} />
+                <AvatarSection user={userData} />
+                <StatsStrip user={userData} />
 
                 <View style={styles.body}>
                     {/* Personal Info */}
                     <SectionCard title="Personal Information" icon="person-outline">
-                        <EditableField label="Full Name" value={user.name} editable={false} />
-                        <EditableField label="Email" value={user.email} editable={false} />
+                        {/* Name and email are read-only — not part of UpdateUser payload */}
+                        <EditableField label="Full Name" value={userData.name} editable={false} />
+                        <EditableField label="Email" value={userData.email} editable={false} />
                         <EditableField
                             label="Phone"
-                            value={user.phone ?? ''}
-                            onChangeText={v => setUser(p => ({ ...p, phone: v }))}
+                            value={phone}
+                            onChangeText={setPhone}
                             keyboardType="phone-pad"
                             editable={editing}
                         />
                     </SectionCard>
 
-                    {/* Address */}
+                    {/* Address — display only, not in UpdateUser */}
                     <SectionCard title="Address" icon="location-outline">
                         <EditableField
                             label="Street"
@@ -230,15 +271,26 @@ export default function ProfileScreen({ navigation }: any) {
                     <SectionCard title="Referral Code" icon="share-social-outline">
                         <View style={styles.referralRow}>
                             <View style={styles.referralCodeBox}>
-                                <Text style={styles.referralCode}>{user.referralCode ?? '—'}</Text>
+                                <Text style={styles.referralCode}>
+                                    {userData.referralCode ?? '—'}
+                                </Text>
                             </View>
-                            <TouchableOpacity style={styles.referralCopyBtn}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.referralCopyBtn,
+                                    codeCopied && styles.referralCopyBtnCopied,
+                                ]}
+                                onPress={handleCopyCode}
+                                disabled={!userData.referralCode}
+                            >
                                 <Ionicons
-                                    name="copy-outline"
+                                    name={codeCopied ? 'checkmark' : 'copy-outline'}
                                     size={16}
                                     color={Colors.accentGreen}
                                 />
-                                <Text style={styles.referralCopyText}>Copy</Text>
+                                <Text style={styles.referralCopyText}>
+                                    {codeCopied ? 'Copied!' : 'Copy'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                         <Text style={styles.referralHint}>
@@ -250,19 +302,19 @@ export default function ProfileScreen({ navigation }: any) {
                     <SectionCard title="Account" icon="shield-outline">
                         <View style={styles.accountRow}>
                             <Ionicons
-                                name={user.isActive ? 'checkmark-circle' : 'close-circle'}
+                                name={userData.isActive ? 'checkmark-circle' : 'close-circle'}
                                 size={16}
-                                color={user.isActive ? Colors.success : Colors.error}
+                                color={userData.isActive ? Colors.success : Colors.error}
                             />
                             <Text style={styles.accountStatusText}>
                                 Account is{' '}
                                 <Text
                                     style={{
-                                        color: user.isActive ? Colors.success : Colors.error,
+                                        color: userData.isActive ? Colors.success : Colors.error,
                                         fontWeight: Typography.fontWeightSemiBold,
                                     }}
                                 >
-                                    {user.isActive ? 'Active' : 'Inactive'}
+                                    {userData.isActive ? 'Active' : 'Inactive'}
                                 </Text>
                             </Text>
                         </View>
@@ -276,13 +328,13 @@ export default function ProfileScreen({ navigation }: any) {
                                         fontWeight: Typography.fontWeightSemiBold,
                                     }}
                                 >
-                                    {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                                    {userData.role.charAt(0).toUpperCase() + userData.role.slice(1)}
                                 </Text>
                             </Text>
                         </View>
                     </SectionCard>
 
-                    {/* Edit / Save buttons */}
+                    {/* Edit / Save / Cancel */}
                     {!editing ? (
                         <TouchableOpacity
                             style={styles.editBtn}
@@ -296,21 +348,22 @@ export default function ProfileScreen({ navigation }: any) {
                         <View style={styles.actionRow}>
                             <TouchableOpacity
                                 style={styles.cancelBtn}
-                                onPress={() => {
-                                    setAddress(mockUser.address ?? {});
-                                    setEditing(false);
-                                }}
+                                onPress={handleCancel}
                                 activeOpacity={0.85}
+                                disabled={isSaving}
                             >
                                 <Text style={styles.cancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={styles.saveBtn}
+                                style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
                                 onPress={handleSave}
                                 activeOpacity={0.85}
+                                disabled={isSaving}
                             >
                                 <Ionicons name="checkmark" size={16} color={Colors.textInverse} />
-                                <Text style={styles.saveBtnText}>Save Changes</Text>
+                                <Text style={styles.saveBtnText}>
+                                    {isSaving ? 'Saving…' : 'Save Changes'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                     )}
@@ -318,12 +371,7 @@ export default function ProfileScreen({ navigation }: any) {
                     {/* Logout */}
                     <TouchableOpacity
                         style={styles.logoutBtn}
-                        onPress={() =>
-                            Alert.alert('Logout', 'Are you sure you want to logout?', [
-                                { text: 'Cancel', style: 'cancel' },
-                                { text: 'Logout', style: 'destructive', onPress: () => {} },
-                            ])
-                        }
+                        onPress={handleLogout}
                         activeOpacity={0.85}
                     >
                         <Ionicons name="log-out-outline" size={16} color={Colors.error} />
@@ -503,6 +551,10 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.accentGreen,
     },
+    referralCopyBtnCopied: {
+        borderColor: Colors.accentMuted,
+        opacity: 0.7,
+    },
     referralCopyText: {
         fontSize: Typography.fontSizeSM,
         color: Colors.accentGreen,
@@ -564,6 +616,9 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.accentGreen,
         borderRadius: Radius.md,
         paddingVertical: Spacing.sm + 4,
+    },
+    saveBtnDisabled: {
+        opacity: 0.6,
     },
     saveBtnText: {
         fontSize: Typography.fontSizeMD,
