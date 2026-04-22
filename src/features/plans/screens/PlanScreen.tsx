@@ -292,6 +292,7 @@ function PlanCard({ plan, onInvest }: { plan: Plan; onInvest: (p: Plan) => void 
 
 export default function PlansScreen({ navigation }: any) {
     const { data: plans, isLoading, isError, isRefetching, refetch } = useGetPlans();
+    debugger;
     const [activeType, setActiveType] = useState<'All' | Plan['planType']>('All');
 
     const openDrawer = () => navigation.openDrawer();
