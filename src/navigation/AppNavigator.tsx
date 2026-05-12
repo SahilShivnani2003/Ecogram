@@ -8,6 +8,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/service/queryClient';
 import { AlertProvider } from '@/context/AlertContext';
 import LoginScreen from '@/features/auth/screens/LoginScreen';
+import CustomerDrawerNavigation from './CustomerDrawerNavigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 export default function AppNavigator() {
@@ -25,6 +26,7 @@ export default function AppNavigator() {
                         <Stack.Screen name="Splash" component={SplashScreen} />
                         <Stack.Screen name="Login" component={LoginScreen} />
                         <Stack.Screen name="Investor" component={InvestorDrawerNavigation} />
+                        <Stack.Screen name="customer" component={CustomerDrawerNavigation} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>

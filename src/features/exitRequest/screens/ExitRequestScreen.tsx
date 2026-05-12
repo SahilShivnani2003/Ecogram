@@ -10,6 +10,7 @@ import {
     TextInput,
     ActivityIndicator,
     Alert,
+    RefreshControl,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius } from '@theme/index';
@@ -262,12 +263,15 @@ export default function ExitRequestScreen({ navigation }: any) {
     const [bankDetails, setBankDetails] = useState<BankDetails>({});
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState<boolean>(
+        refetchingExitRequests || refetchingInvestments,
+    );
 
     const openDrawer = () => navigation.openDrawer();
 
     // Real data from hooks
-    const investments: Investment[] = investmentData ?? [];
-    const exitRequests: ExitRequest[] = exitRequestData ?? [];
+    const investments: Investment[] = investmentData?.investments ?? [];
+    const exitRequests: ExitRequest[] = exitRequestData?.exitRequests ?? [];
 
     const activeInvestments = investments.filter(i => ['active', 'pending'].includes(i.status));
     const selectedInv = investments.find(i => i._id === selectedInvId);
@@ -327,10 +331,21 @@ export default function ExitRequestScreen({ navigation }: any) {
         }
     };
 
+    const handleRefresh = () => {
+        refetchExitRequests();
+        refetchInvestments();
+        setIsRefreshing(false);
+    };
+
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={Colors.bgDeep} />
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.container}>
+            <ScrollView
+                contentContainerStyle={styles.scroll}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+                }
+            >
                 <ScreenHeader onMenuPress={openDrawer} />
 
                 <View style={styles.body}>
@@ -551,7 +566,7 @@ export default function ExitRequestScreen({ navigation }: any) {
                     ) : null}
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 

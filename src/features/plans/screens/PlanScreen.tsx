@@ -298,7 +298,7 @@ export default function PlansScreen({ navigation }: any) {
     const openDrawer = () => navigation.openDrawer();
 
     // Null-safe derived list
-    const allPlans: Plan[] = plans ?? [];
+    const allPlans: Plan[] = plans?.plans ?? [];
     const filtered =
         activeType === 'All' ? allPlans : allPlans.filter(p => p.planType === activeType);
 
@@ -309,22 +309,20 @@ export default function PlansScreen({ navigation }: any) {
     // ── Loading ────────────────────────────────────────────────────────────
     if (isLoading) {
         return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor={Colors.bgDeep} />
+            <View style={styles.container}>
                 <ScreenHeader onMenuPress={openDrawer} />
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color={Colors.accentGreen} />
                     <Text style={styles.loadingText}>Fetching investment plans…</Text>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     // ── Error ──────────────────────────────────────────────────────────────
     if (isError) {
         return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor={Colors.bgDeep} />
+            <View style={styles.container}>
                 <ScreenHeader onMenuPress={openDrawer} />
                 <View style={styles.centered}>
                     <Ionicons name="alert-circle-outline" size={40} color={Colors.error} />
@@ -333,7 +331,7 @@ export default function PlansScreen({ navigation }: any) {
                         <Text style={styles.retryBtnText}>Retry</Text>
                     </TouchableOpacity>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 

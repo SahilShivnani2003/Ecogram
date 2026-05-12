@@ -74,8 +74,7 @@ export default function EarningsScreen({ navigation }: any) {
   const openDrawer = () => navigation.openDrawer();
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.bgDeep} />
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -139,7 +138,7 @@ export default function EarningsScreen({ navigation }: any) {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

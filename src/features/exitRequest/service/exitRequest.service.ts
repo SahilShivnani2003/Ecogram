@@ -4,7 +4,7 @@ export const getMyExitRequest = async () => {
     try {
         console.log('Fetching my exit Request....');
 
-        const response = await privateClient.get('')
+        const response = await privateClient.get('/exit-requests/my')
 
         console.log('My exit request response : ', response.data);
 

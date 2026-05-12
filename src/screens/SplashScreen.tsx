@@ -5,12 +5,14 @@ import { Colors, Spacing, Typography } from '@theme/index';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useAlert } from '@/context/AlertContext';
 
 const { width, height } = Dimensions.get('window');
 
 type splashScreenProps = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
 const SplashScreen = ({ navigation }: splashScreenProps) => {
+    const alert = useAlert();
     // ── Animation refs ──────────────────────────────────────────────────────────
     const bgScale = useRef(new Animated.Value(1.08)).current;
     const logoScale = useRef(new Animated.Value(0)).current;
@@ -33,10 +35,14 @@ const SplashScreen = ({ navigation }: splashScreenProps) => {
         const { isAuthenticated, user } = useAuthStore.getState();
 
         if (isAuthenticated) {
+            console.log(`Founded user : ${user}`);
+
             if (user?.role === 'investor') {
                 navigation.replace('Investor');
+            } else if (user?.role === 'customer') {
+                navigation.replace('customer');
             } else {
-                console.log('Customer login');
+                navigation.replace('Login');
             }
         } else {
             navigation.replace('Login');

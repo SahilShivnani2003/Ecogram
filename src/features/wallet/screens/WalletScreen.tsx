@@ -151,8 +151,8 @@ const WalletScreen = ({ navigation }: WalletScreenProps) => {
     const alert = useAlert();
 
     // Safely fall back when wallet hasn't loaded yet
-    const wallet: Wallet = walletData ?? FALLBACK_WALLET;
-    const history: Transaction[] = withdrawals ?? [];
+    const wallet: Wallet = walletData?.wallet ?? FALLBACK_WALLET;
+    const history: Transaction[] = withdrawals?.withdrawals ?? [];
 
     // ── Local state ───────────────────────────────────────────────────────────
     const [form, setForm] = useState<WithdrawForm>({

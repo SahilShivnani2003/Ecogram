@@ -20,6 +20,7 @@ import { DrawerScreenProps } from '@react-navigation/drawer';
 import { InvestorDrawerParamList } from '@/types/InvestorDrawerParamList';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/RootStackParamList';
+import { useAlert } from '@/context/AlertContext';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -149,6 +150,7 @@ function SectionCard({
 type profileScreenProps = DrawerScreenProps<InvestorDrawerParamList, 'Profile'>;
 
 export default function ProfileScreen({ navigation }: profileScreenProps) {
+    const alert = useAlert();
     const { user: userData, removeAuth } = useAuthStore();
     const { mutate: updateUser, isPending: isSaving } = useUpdateUser();
 
@@ -186,23 +188,20 @@ export default function ProfileScreen({ navigation }: profileScreenProps) {
         updateUser(payload, {
             onSuccess: () => {
                 setEditing(false);
-                Alert.alert('Saved', 'Profile updated successfully.');
+                alert.success('Profile updated successfully');
             },
             onError: (err: any) => {
-                Alert.alert(
-                    'Update Failed',
-                    err?.message ?? 'Something went wrong. Please try again.',
-                );
+                alert.error(err?.message ?? 'Something went wrong. Please try again.');
             },
         });
     };
 
     const handleLogout = () => {
-        Alert.alert('Logout', 'Are you sure you want to logout?', [
-            { text: 'Cancel', style: 'cancel' },
+
+        alert.confirm('Are you sure you want to logout?', [
+            { label: 'Cancel', onPress: alert.dismiss, style: 'danger' },
             {
-                text: 'Logout',
-                style: 'destructive',
+                label: 'Logout',
                 onPress: () => {
                     removeAuth();
                     navigation.getParent<NativeStackNavigationProp<RootStackParamList>>().reset({
@@ -210,6 +209,7 @@ export default function ProfileScreen({ navigation }: profileScreenProps) {
                         routes: [{ name: 'Login' }],
                     });
                 },
+                style: 'secondary',
             },
         ]);
     };

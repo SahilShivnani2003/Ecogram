@@ -34,7 +34,7 @@ export const createWithdrawl = async (data: any) => {
     try {
         console.log('Creating withdrawl ')
 
-        const response = await privateClient.post('/wallet/withdraw');
+        const response = await privateClient.post('/wallet/withdraw', data);
 
         console.log('Create withdrawl response : ', response.data);
 

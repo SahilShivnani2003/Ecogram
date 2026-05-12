@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     SafeAreaView,
     StatusBar,
+    RefreshControl,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@theme/index';
@@ -166,7 +167,7 @@ export default function BookingsScreen({ navigation }: any) {
     const [activeFilter, setActiveFilter] = useState<StatusFilter>('All');
     const openDrawer = () => navigation.openDrawer();
 
-    const bookings: Booking[] = myBookings ?? [];
+    const bookings: Booking[] = myBookings?.bookings ?? [];
 
     const filtered =
         activeFilter === 'All' ? bookings : bookings.filter(b => b.status === activeFilter);
@@ -174,9 +175,12 @@ export default function BookingsScreen({ navigation }: any) {
     const isLoadingAny = isLoading || isRefetching;
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={Colors.bgDeep} />
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.container}>
+            <ScrollView
+                contentContainerStyle={styles.scroll}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+            >
                 <ScreenHeader onMenuPress={openDrawer} />
 
                 {/* Stats strip */}
@@ -270,7 +274,7 @@ export default function BookingsScreen({ navigation }: any) {
                     )}
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 

@@ -10,6 +10,7 @@ import {
     Image,
     TextInput,
     ActivityIndicator,
+    RefreshControl,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius, Shadow } from '@theme/index';
@@ -197,7 +198,7 @@ export default function ResortsScreen({ navigation }: any) {
 
     const openDrawer = () => navigation.openDrawer();
 
-    const resorts: Resort[] = allResorts ?? [];
+    const resorts: Resort[] = allResorts?.resorts ?? [];
 
     const filtered = resorts.filter(r => {
         const q = search.toLowerCase();
@@ -213,9 +214,13 @@ export default function ResortsScreen({ navigation }: any) {
     const isLoadingAny = isLoading || isRefetching;
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={Colors.bgDeep} />
-            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.container}>
+            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} refreshControl={
+                <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+                />
+            }>
                 <ScreenHeader onMenuPress={openDrawer} />
 
                 {/* Search */}
@@ -295,7 +300,7 @@ export default function ResortsScreen({ navigation }: any) {
                     )}
                 </View>
             </ScrollView>
-        </SafeAreaView>
+        </View>
     );
 }
 

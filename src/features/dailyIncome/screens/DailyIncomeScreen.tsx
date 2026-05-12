@@ -141,7 +141,7 @@ export default function DailyIncomeScreen({ navigation }: any) {
     const openDrawer = () => navigation.openDrawer();
 
     // ── Safely derive display list ────────────────────────────────────────────
-    const records: DailyIncome[] = dailyIncome ?? [];
+    const records: DailyIncome[] = dailyIncome?.income ?? [];
 
     const filtered =
         filter === 'All types' ? records : records.filter(i => i.incomeType === filter);
@@ -165,8 +165,7 @@ export default function DailyIncomeScreen({ navigation }: any) {
     // ── Error state ───────────────────────────────────────────────────────────
     if (isError) {
         return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor={Colors.bgDeep} />
+            <View style={styles.container}>
                 <ScreenHeader onMenuPress={openDrawer} />
                 <View style={styles.centered}>
                     <Ionicons name="alert-circle-outline" size={40} color={Colors.error} />
@@ -175,7 +174,7 @@ export default function DailyIncomeScreen({ navigation }: any) {
                         <Text style={styles.retryBtnText}>Retry</Text>
                     </TouchableOpacity>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 

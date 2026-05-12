@@ -151,6 +151,8 @@ const LoginScreen = ({ navigation }: LoginScreenProps) => {
 
                     if (data?.user?.role === 'investor') {
                         navigation.replace('Investor');
+                    }else if(data?.user?.role === 'customer'){
+                        navigation.replace('customer');
                     }
                 },
                 onError: (error: ApiError) => {

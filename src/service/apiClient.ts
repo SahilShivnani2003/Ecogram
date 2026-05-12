@@ -10,7 +10,7 @@ export const publicClient = axios.create({
     headers: {
         "Content-Type": "application/json"
     },
-    timeout: 10000
+    timeout: 50000
 });
 
 //Error handling for the public client
@@ -68,7 +68,7 @@ privateClient.interceptors.response.use(
 
                 if(response.data?.success){
                     console.log('Token updated : ', response.data);
-                    updateToken(response.data?.token);
+                    await updateToken(response.data?.token, response?.data?.user);
                 };
                 
             }catch(error){
