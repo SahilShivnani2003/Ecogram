@@ -14,6 +14,9 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Radius, Shadow, Spacing, Typography } from '@theme/index';
 import { Plan } from '../types/Plan';
 import { useGetPlans } from '../hooks/useGetPlans';
+import { useCreateInvestment } from '@/features/investments/hooks/userCreateInvestment';
+import { useAlert } from '@/context/AlertContext';
+import { ApiError } from '@/types/ApiError';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -291,9 +294,11 @@ function PlanCard({ plan, onInvest }: { plan: Plan; onInvest: (p: Plan) => void 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function PlansScreen({ navigation }: any) {
+    const alert = useAlert();
     const { data: plans, isLoading, isError, isRefetching, refetch } = useGetPlans();
     debugger;
     const [activeType, setActiveType] = useState<'All' | Plan['planType']>('All');
+    const { mutate: createInvestment } = useCreateInvestment();
 
     const openDrawer = () => navigation.openDrawer();
 
@@ -303,7 +308,21 @@ export default function PlansScreen({ navigation }: any) {
         activeType === 'All' ? allPlans : allPlans.filter(p => p.planType === activeType);
 
     const handleInvest = (plan: Plan) => {
-        navigation.navigate('Investments', { plan });
+        const data = {
+            investedAmount: plan.minAmount,
+            planId: plan._id,
+            planType: plan.planType,
+            sqft: plan.sizes,
+        };
+
+        createInvestment(data, {
+            onSuccess: data => {
+                alert.success(data?.data?.message || 'Investment created successfully');
+            },
+            onError: (error: ApiError) => {
+                alert.error(error?.message || 'Something went wrong');
+            },
+        });
     };
 
     // ── Loading ────────────────────────────────────────────────────────────
